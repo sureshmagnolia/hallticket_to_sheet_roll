@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Hall Ticket Extractor</title>
+    
+    <!-- 1. Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Load PyScript -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+</head>
+<body class="bg-gray-100 font-sans flex items-center justify-center min-h-screen">
+
+    <!-- 3. Define Python Environment -->
+    <!-- This tells PyScript to pre-load the libraries we need -->
+    <py-config>
+        <!-- Pinning pdfplumber to a pure-python version to avoid pypdfium2 error -->
+        packages = ["pandas", "pdfplumber==0.7.1", "PyPDF2", "pillow"]
+    </py-config>
+
+    <div class="container max-w-2xl mx-auto p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full">
+            
+            <header class="mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">PDF Hall Ticket Extractor</h1>
+                <p class="text-gray-600 mt-2">
+                    Upload your "HT_Third Semester..." PDF file, and this app will run the Python extraction script directly in your browser.
+                </p>
+            </header>
+
+            <!-- 4. HTML Interface -->
+            <div class="space-y-4">
+                <div>
+                    <label for="pdf-file" class="block text-sm font-medium text-gray-700">1. Select PDF File:</label>
+                    <input type="file" id="pdf-file" accept=".pdf"
+                           class="mt-1 block w-full text-sm text-gray-500
+                                  file:mr-4 file:py-2 file:px-4
+                                  file:rounded-md file:border-0
+                                  file:text-sm file:font-semibold
+                                  file:bg-indigo-50 file:text-indigo-700
+                                  hover:file:bg-indigo-100"/>
+                </div>
+                
+                <button id="run-button" py-click="run_extraction"
+                        class="w-full inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-3 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50">
+                    2. Run Extraction
+                </button>
+            </div>
+
+            <!-- 5. Output & Download Area -->
+            <div class="mt-6">
+                <h3 class="text-lg font-medium text-gray-900">Processing Log:</h3>
+                <div id="status" class="w-full h-48 p-3 mt-2 bg-gray-900 text-gray-200 text-sm font-mono rounded-md overflow-y-auto">
+                    Waiting for file...
+                </div>
+            </div>
+
+            <div id="download-area" class="mt-6">
+                <!-- The download link will appear here -->
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 6. The Python Script -->
+    <py-script>
+        import pandas as pd
+        import pdfplumber
+        import re
+        import io
+        from js import document, console, URL, Blob
+        import asyncio
+
+        # Get references to our HTML elements
+        status_div = document.getElementById("status")
+        download_area = document.getElementById("download-area")
+        run_button = document.getElementById("run-button")
+
+        def log_message(message):
+            """Helper function to print messages to the HTML log."""
+            console.log(message)
+            # Use single-quotes for the f-string, double-quotes for HTML
+            status_div.innerHTML += f'<p class="mb-1">&gt; {message}</p>'
+            status_div.scrollTop = status_div.scrollHeight
+
+        async def run_extraction(event):
+            """
+            This function is called when the "Run Extraction" button is clicked.
+            """
+            try:
+                # Disable button to prevent double-click
+                run_button.disabled = True
+                download_area.innerHTML = ""
+                status_div.innerHTML = ""
+                
+                log_message("Starting extraction...")
+
+                # 1. Get the file from the HTML input
+                file_input = document.getElementById("pdf-file")
+                file_list = file_input.files
+                
+                if file_list.length == 0:
+                    log_message("Error: Please select a PDF file first.")
+                    run_button.disabled = False
+                    return
+
+                file = file_list.item(0)
+                log_message(f"Loading file: {file.name}...")
+
+                # 2. Read the file into a Python-readable bytes object
+                file_bytes = await file.arrayBuffer()
+                pdf_file_obj = io.BytesIO(file_bytes.to_py())
+
+                log_message("File loaded. Processing with pdfplumber...")
+                
+                all_exam_rows = []
+                
+                # Regex definitions for "wild card" matching
+                # Use re.compile for slight performance boost
+                # We use re.match (anchored to start) for strict checks
+                # and re.search (unanchored) for finding content
+                code_regex_strict = re.compile(r'^[A-Z]{3,4}\d[A-Z0-9]{3,7}(\(\d\))?$')
+                date_regex_strict = re.compile(r'^\d{2}\.\d{2}\.\d{4}$')
+                time_regex_strict = re.compile(r'^\d{2}:\d{2}\sPM$')
+                
+                # Regex for searching *within* cells
+                code_regex_search = re.compile(r'[A-Z]{3,4}\d[A-Z0-9]{3,7}(\(\d\))?')
+                date_regex_search = re.compile(r'\d{2}\.\d{2}\.\d{4}')
+                time_regex_search = re.compile(r'\d{2}:\d{2}\sPM')
+                
+                # Regex for junk cells to ignore
+                slot_regex_strict = re.compile(r'^(Core|Minor|MDC|VAC)\s\d$')
+                num_regex_strict = re.compile(r'^\d$') # Matches the '#' column
+                
+                reg_num_wildcard = r'VPAY[A-Z]{3}[0-9]{3}'
+
+                # 3. --- Start of PDF processing logic ---
+                with pdfplumber.open(pdf_file_obj) as pdf:
+                    total_pages = len(pdf.pages)
+                    log_message(f"Total pages found: {total_pages}")
+                    log_message("Using 'text' alignment strategy for tables.")
+
+
+                    for i, page in enumerate(pdf.pages):
+                        if (i + 1) % 10 == 0 or (i + 1) == total_pages:
+                            log_message(f"Processing page {i + 1}/{total_pages}...")
+                        
+                        # Extract text with a layout-preserving tolerance
+                        page_text = page.extract_text(x_tolerance=1, y_tolerance=1)
+                        
+                        # --- Find Candidate Name ---
+                        name = "Unknown"
+                        name_match = re.search(r'Name of Candidate\s*","(.*?)\s*","', page_text, re.DOTALL)
+                        if name_match:
+                            name = name_match.group(1).strip().replace('\n', ' ')
+                        else:
+                            name_match_fallback = re.search(r'Name of Candidate\s+(.*?)\s+Date of Birth', page_text)
+                            if name_match_fallback:
+                                name = name_match_fallback.group(1).strip().replace('\n', ' ')
+
+                        # --- Find Register Number (Robust Logic) ---
+                        reg_num = "Unknown"
+                        reg_match_label = re.search(r'REGISTER\s*\n*\s*NUMBER\s+([A-Z0-9]+)', page_text, re.DOTALL)
+                        if reg_match_label:
+                            reg_num = reg_match_label.group(1).strip()
+                        else:
+                            reg_match_wildcard_match = re.search(reg_num_wildcard, page_text)
+                            if reg_match_wildcard_match:
+                                reg_num = reg_match_wildcard_match.group(0).strip()
+                        
+                        # --- Extract Table Data ---
+                        tables = page.extract_tables(table_settings={
+                            "vertical_strategy": "text",
+                            "horizontal_strategy": "lines"
+                        })
+                        
+                        processed_rows_on_page = 0
+                        
+                        if tables:
+                            for table in tables:
+                                for row in table:
+                                    if not row or not isinstance(row, list):
+                                        continue
+                                    
+                                    # --- NEW LOGIC: Identify data by content, not position ---
+                                    course_code = "Unknown"
+                                    course_name = "Unknown"
+                                    date_val = "Unknown"
+                                    time_val = "Unknown"
+                                    
+                                    potential_names = []
+                                    found_code = False
+                                    found_date = False
+
+                                    row_str = " ".join(filter(None, [c.strip().replace('\n', ' ') if c else '' for c in row]))
+                                    
+                                    # --- Wildcard Row Validation ---
+                                    # A valid row MUST contain a code AND a date
+                                    if not (code_regex_search.search(row_str) and date_regex_search.search(row_str)):
+                                        continue # This skips headers and junk rows like the 'P...of Candidate' one
+
+                                    # --- Identify content of each cell ---
+                                    for cell in row:
+                                        if not cell:
+                                            continue
+                                        
+                                        cell_text = cell.strip().replace('\n', ' ')
+                                        
+                                        # 1. Check for Course Code
+                                        if code_regex_strict.match(cell_text):
+                                            course_code = cell_text
+                                            found_code = True
+                                        # 2. Check for Date
+                                        elif date_regex_strict.match(cell_text):
+                                            date_val = cell_text
+                                            found_date = True
+                                        # 3. Check for Time
+                                        elif time_regex_strict.match(cell_text):
+                                            time_val = cell_text
+                                        # 4. Check for combined Date/Time (from B.Com file)
+                                        elif date_regex_strict.match(cell_text.split(' ')[0]):
+                                            parts = cell_text.split(' ')
+                                            date_val = parts[0]
+                                            time_val = " ".join(parts[1:]) # Re-join all parts just in case
+                                            found_date = True
+                                        # 5. If not any of the above, it's a potential name or slot
+                                        elif not (slot_regex_strict.match(cell_text) or num_regex_strict.match(cell_text) or cell_text == "Sign"):
+                                            potential_names.append(cell_text)
+                                    # --- End of cell loop ---
+                                    
+                                    # --- Handle Jumbled Cells (B.Com PDF) ---
+                                    # If we found a date but no code, the code must be jumbled with a name
+                                    if found_date and not found_code and potential_names:
+                                        for name_cell in potential_names:
+                                            code_match = code_regex_search.search(name_cell)
+                                            if code_match:
+                                                course_code = code_match.group(0)
+                                                found_code = True
+                                                # Add the rest of the cell back as a potential name
+                                                potential_names.append(name_cell.replace(course_code, '').strip())
+                                                break # Found the code
+
+                                    # We *must* have a code and date to proceed
+                                    if not (found_code and found_date):
+                                        continue
+
+                                    # --- Assign Course Name ---
+                                    # Clean junk from potential names
+                                    cleaned_names = []
+                                    for p_name in potential_names:
+                                        # Remove the code if it's still in there
+                                        p_name_cleaned = p_name.replace(course_code, '').strip()
+                                        if p_name_cleaned:
+                                            cleaned_names.append(p_name_cleaned)
+                                    
+                                    if cleaned_names:
+                                        course_name = max(cleaned_names, key=len) # Longest string is the name
+                                    
+                                    # --- This is a valid data row ---
+                                    try:
+                                        formatted_row = {
+                                            'Date': date_val, 'Time': time_val, 'Course code': course_code,
+                                            'Course name': course_name, 'Name of Candidate': name, 'REGISTER NUMBER': reg_num
+                                        }
+                                        all_exam_rows.append(formatted_row)
+                                        processed_rows_on_page += 1
+
+                                    except Exception as e:
+                                        log_message(f"Warning: Skipping row on page {i+1}. Details: {e}")
+                        
+                        if processed_rows_on_page == 0:
+                            log_message(f"Warning: No valid course data rows found on page {i + 1} for {name}.")
+                            
+                # --- End of PDF processing logic ---
+
+                if not all_exam_rows:
+                    log_message("Error: No data was extracted. Check PDF format.")
+                    run_button.disabled = False
+                    return
+                
+                log_message(f"Processed {total_pages} pages. Found {len(all_exam_rows)} exam entries.")
+                log_message("Converting to DataFrame and creating CSV...")
+
+                # 4. Convert to Pandas DataFrame and create CSV string
+                df = pd.DataFrame(all_exam_rows)
+                df = df[['Date', 'Time', 'Course code', 'Course name', 'Name of Candidate', 'REGISTER NUMBER']]
+                csv_data = df.to_csv(index=False, encoding='utf-8')
+
+                # 5. Create a downloadable link for the CSV
+                blob = Blob.new([csv_data], {type: "text/csv;charset=utf-8"})
+                url = URL.createObjectURL(blob)
+                
+                download_area.innerHTML = f"""
+                    <a href="{url}" download="full_schedule.csv"
+                       class="w-full inline-flex justify-center rounded-md border border-transparent bg-green-600 py-3 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                        Download full_schedule.csv ({len(all_exam_rows)} rows)
+                    </a>
+                """
+                log_message("Success! Your file is ready for download.")
+
+            except Exception as e:
+                log_message(f"An error occurred: {e}")
+            
+            # Re-enable the button
+            run_button.disabled = False
+    </py-script>
+
+</body>
+</html>
+
