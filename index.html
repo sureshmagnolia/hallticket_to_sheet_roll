@@ -172,8 +172,15 @@
                 slot_regex_strict = re.compile(r'^(Core|Minor|MDC|VAC)\s\d$')
                 num_regex_strict = re.compile(r'^\d$') # Matches the '#' column
                 
-                # Regex to clean time fragments from course names
-                time_fragment_cleaner = re.compile(r'\s+\:?\d{2}\sPM$')
+                # --- NEW SYSTEMIC FIX ---
+                # Regex for junk *fragments* to ignore (from jumbled cells)
+                code_fragment_regex = re.compile(r'^\(\d[A-Z]?\)$') # Matches (1B), (3), etc.
+                time_fragment_regex = re.compile(r'^:?\d{2}\sPM$') # Matches :00 PM, 14 PM, etc.
+                pm_fragment_regex = re.compile(r'^PM$') # Matches just PM
+                # --- END NEW FIX ---
+                
+                # This is a fallback cleaner, but the new logic should catch most fragments
+                time_fragment_cleaner = re.compile(r'\s+\:?\d{2}\sPM$') 
                 
                 reg_num_wildcard = r'VPAY[A-Z]{3}[0-9]{3}'
 
@@ -258,8 +265,18 @@
                                             date_val = parts[0]
                                             time_val = " ".join(parts[1:])
                                             found_date = True
-                                        elif not (slot_regex_strict.match(cell_text) or num_regex_strict.match(cell_text) or cell_text == "Sign"):
+                                        
+                                        # --- UPDATED JUNK CHECK (SYSTEMIC FIX) ---
+                                        elif not (
+                                            slot_regex_strict.match(cell_text) or
+                                            num_regex_strict.match(cell_text) or
+                                            code_fragment_regex.match(cell_text) or  # NEW
+                                            time_fragment_regex.match(cell_text) or  # NEW
+                                            pm_fragment_regex.match(cell_text) or    # NEW
+                                            cell_text == "Sign"
+                                        ):
                                             potential_names.append(cell_text)
+                                    # --- END UPDATED JUNK CHECK ---
                                     
                                     if found_date and not found_code and potential_names:
                                         for name_cell in potential_names:
@@ -333,8 +350,12 @@
                                             date_val = date_val.strip().replace('\n', ' ') if date_val else "Unknown"
                                             time_val = time_val.strip().replace('\n', ' ') if time_val else "Unknown"
                                             
-                                            # --- Clean time fragments ---
+                                            # --- SYSTEMIC FIX for LOGIC B ---
+                                            # Clean code fragments from the start
+                                            course_name = re.sub(r'^\(\d[A-Z]?\)\s*', '', course_name) # NEW
+                                            # Clean time fragments from the end
                                             course_name = time_fragment_cleaner.sub('', course_name)
+                                            # --- END FIX ---
 
                                             # Validate the extracted data
                                             if code_regex_search.search(course_code) and date_regex_search.search(date_val):
