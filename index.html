@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Hall Ticket Extractor</title>
+    <!-- 1. Renamed Title -->
+    <title>Hall Ticket Schedule Extractor</title>
     
-    <!-- 1. Load Tailwind CSS for styling -->
+    <!-- Load Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. Load PyScript -->
+    <!-- Load PyScript -->
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
 </head>
 <body class="bg-gray-100 font-sans flex items-center justify-center min-h-screen">
 
-    <!-- 3. Define Python Environment -->
-    <!-- This tells PyScript to pre-load the libraries we need -->
+    <!-- Define Python Environment -->
     <py-config>
         <!-- Pinning pdfplumber to a pure-python version to avoid pypdfium2 error -->
         packages = ["pandas", "pdfplumber==0.7.1", "PyPDF2", "pillow"]
@@ -25,7 +25,8 @@
         <div class="bg-white p-8 rounded-lg shadow-xl w-full">
             
             <header class="mb-6">
-                <h1 class="text-3xl font-bold text-gray-800">PDF Hall Ticket Extractor</h1>
+                <!-- 2. Renamed Header -->
+                <h1 class="text-3xl font-bold text-gray-800">Hall Ticket Schedule Extractor</h1>
                 <p class="text-gray-600 mt-2">
                     Upload your "HT_Third Semester..." PDF file, and this app will run the Python extraction script directly in your browser.
                 </p>
@@ -39,6 +40,8 @@
                     <li>Click 'Run Extraction'.</li>
                     <li>Wait for the processing log to show 'Success!'</li>
                     <li>Click the green 'Download full_schedule.csv' button that appears.</li>
+                    <!-- 3. Added new instruction point -->
+                    <li>If the log shows a 'Warning: All extraction logic failed...' for a page, that student's data may be missing. Please check the final CSV and add any missing data manually.</li>
                 </ol>
                 
                 <h4 class="font-semibold text-gray-800 mt-4">എങ്ങനെ ഉപയോഗിക്കാം:</h4>
@@ -47,11 +50,13 @@
                     <li>'Run Extraction' ബട്ടണിൽ ക്ലിക്ക് ചെയ്യുക.</li>
                     <li>പ്രോസസ്സിംഗ് പൂർത്തിയാകുമ്പോൾ ലോഗിൽ 'Success!' എന്ന് കാണുന്നതുവരെ കാത്തിരിക്കുക.</li>
                     <li>അപ്പോൾ പ്രത്യക്ഷപ്പെടുന്ന പച്ച 'Download full_schedule.csv' ബട്ടൺ ക്ലിക്ക് ചെയ്ത് ഫയൽ സേവ് ചെയ്യുക.</li>
+                    <!-- 4. Added new instruction point in Malayalam -->
+                    <li>ലോഗിൽ ഏതെങ്കിലും പേജിന് 'Warning: All extraction logic failed...' എന്ന് കാണിക്കുകയാണെങ്കിൽ, ആ വിദ്യാർത്ഥിയുടെ ഡാറ്റ അപൂർണ്ണമായിരിക്കാം. ദയവായി CSV ഫയൽ പരിശോധിച്ച്, വിട്ടുപോയ ഡാറ്റ സ്വയം ചേർക്കുക.</li>
                 </ol>
             </div>
             <!-- END HOW TO USE SECTION -->
 
-            <!-- NEW: Disclaimer -->
+            <!-- Disclaimer -->
             <div class="bg-yellow-50 border border-yellow-300 p-4 rounded-md mb-6">
                 <h4 class="font-semibold text-yellow-800">Disclaimer:</h4>
                 <p class="text-sm text-yellow-700 mt-2">
@@ -63,10 +68,10 @@
                     ഈ ടൂൾ ഓട്ടോമേറ്റഡ് ലോജിക് ഉപയോഗിച്ചാണ് ഡാറ്റ വേർതിരിച്ചെടുക്കുന്നത്. PDF ഫോർമാറ്റിംഗിലെ വ്യത്യാസങ്ങൾ കാരണം, എടുത്ത ഡാറ്റയിൽ പിശകുകളോ കൃത്യതക്കുറവോ ഉണ്ടാവാം. ലഭിച്ച ഫലങ്ങൾ നിങ്ങൾ വീണ്ടും പരിശോധിച്ച് ഉറപ്പുവരുത്തുക.
                 </p>
             </div>
-            <!-- END NEW SECTION -->
+            <!-- END Disclaimer SECTION -->
 
 
-            <!-- 4. HTML Interface -->
+            <!-- HTML Interface -->
             <div class="space-y-4">
                 <div>
                     <label for="pdf-file" class="block text-sm font-medium text-gray-700">1. Select PDF File:</label>
@@ -85,7 +90,7 @@
                 </button>
             </div>
 
-            <!-- 5. Output & Download Area -->
+            <!-- Output & Download Area -->
             <div class="mt-6">
                 <h3 class="text-lg font-medium text-gray-900">Processing Log:</h3>
                 <div id="status" class="w-full h-48 p-3 mt-2 bg-gray-900 text-gray-200 text-sm font-mono rounded-md overflow-y-auto">
@@ -100,7 +105,7 @@
         </div>
     </div>
 
-    <!-- 6. The Python Script -->
+    <!-- The Python Script -->
     <py-script>
         import pandas as pd
         import pdfplumber
@@ -154,9 +159,6 @@
                 all_exam_rows = []
                 
                 # Regex definitions for "wild card" matching
-                # Use re.compile for slight performance boost
-                # We use re.match (anchored to start) for strict checks
-                # and re.search (unanchored) for finding content
                 code_regex_strict = re.compile(r'^[A-Z]{3,4}\d[A-Z0-9]{3,7}(\(\d\))?$')
                 date_regex_strict = re.compile(r'^\d{2}\.\d{2}\.\d{4}$')
                 time_regex_strict = re.compile(r'^\d{2}:\d{2}\sPM$')
@@ -169,6 +171,9 @@
                 # Regex for junk cells to ignore
                 slot_regex_strict = re.compile(r'^(Core|Minor|MDC|VAC)\s\d$')
                 num_regex_strict = re.compile(r'^\d$') # Matches the '#' column
+                
+                # Regex to clean time fragments from course names
+                time_fragment_cleaner = re.compile(r'\s+\:?\d{2}\sPM$')
                 
                 reg_num_wildcard = r'VPAY[A-Z]{3}[0-9]{3}'
 
@@ -183,7 +188,6 @@
                         if (i + 1) % 10 == 0 or (i + 1) == total_pages:
                             log_message(f"Processing page {i + 1}/{total_pages}...")
                         
-                        # Extract text with a layout-preserving tolerance
                         page_text = page.extract_text(x_tolerance=1, y_tolerance=1)
                         
                         # --- Find Candidate Name ---
@@ -213,19 +217,19 @@
                         })
                         
                         processed_rows_on_page = 0
+                        temp_rows_for_page = []
                         
+                        # --- LOGIC A: Wild Card (for jumbled PDFs) ---
                         if tables:
                             for table in tables:
                                 for row in table:
                                     if not row or not isinstance(row, list):
                                         continue
                                     
-                                    # --- NEW LOGIC: Identify data by content, not position ---
                                     course_code = "Unknown"
                                     course_name = "Unknown"
                                     date_val = "Unknown"
                                     time_val = "Unknown"
-                                    
                                     potential_names = []
                                     found_code = False
                                     found_date = False
@@ -233,81 +237,123 @@
                                     row_str = " ".join(filter(None, [c.strip().replace('\n', ' ') if c else '' for c in row]))
                                     
                                     # --- Wildcard Row Validation ---
-                                    # A valid row MUST contain a code AND a date
-                                    if not (code_regex_search.search(row_str) and date_regex_search.search(row_str)):
-                                        continue # This skips headers and junk rows like the 'P...of Candidate' one
+                                    # A valid row MUST contain a code OR a date
+                                    if not (code_regex_search.search(row_str) or date_regex_search.search(row_str)):
+                                        continue # This skips headers
 
-                                    # --- Identify content of each cell ---
                                     for cell in row:
-                                        if not cell:
-                                            continue
-                                        
+                                        if not cell: continue
                                         cell_text = cell.strip().replace('\n', ' ')
                                         
-                                        # 1. Check for Course Code
                                         if code_regex_strict.match(cell_text):
                                             course_code = cell_text
                                             found_code = True
-                                        # 2. Check for Date
                                         elif date_regex_strict.match(cell_text):
                                             date_val = cell_text
                                             found_date = True
-                                        # 3. Check for Time
                                         elif time_regex_strict.match(cell_text):
                                             time_val = cell_text
-                                        # 4. Check for combined Date/Time (from B.Com file)
                                         elif date_regex_strict.match(cell_text.split(' ')[0]):
                                             parts = cell_text.split(' ')
                                             date_val = parts[0]
-                                            time_val = " ".join(parts[1:]) # Re-join all parts just in case
+                                            time_val = " ".join(parts[1:])
                                             found_date = True
-                                        # 5. If not any of the above, it's a potential name or slot
                                         elif not (slot_regex_strict.match(cell_text) or num_regex_strict.match(cell_text) or cell_text == "Sign"):
                                             potential_names.append(cell_text)
-                                    # --- End of cell loop ---
                                     
-                                    # --- Handle Jumbled Cells (B.Com PDF) ---
-                                    # If we found a date but no code, the code must be jumbled with a name
                                     if found_date and not found_code and potential_names:
                                         for name_cell in potential_names:
                                             code_match = code_regex_search.search(name_cell)
                                             if code_match:
                                                 course_code = code_match.group(0)
                                                 found_code = True
-                                                # Add the rest of the cell back as a potential name
                                                 potential_names.append(name_cell.replace(course_code, '').strip())
-                                                break # Found the code
-
+                                                break 
+                                    
                                     # We *must* have a code and date to proceed
                                     if not (found_code and found_date):
                                         continue
 
-                                    # --- Assign Course Name ---
-                                    # Clean junk from potential names
                                     cleaned_names = []
                                     for p_name in potential_names:
-                                        # Remove the code if it's still in there
                                         p_name_cleaned = p_name.replace(course_code, '').strip()
                                         if p_name_cleaned:
                                             cleaned_names.append(p_name_cleaned)
                                     
                                     if cleaned_names:
-                                        course_name = max(cleaned_names, key=len) # Longest string is the name
+                                        course_name = " ".join(cleaned_names) # Join all fragments
+                                        # --- Clean time fragments ---
+                                        course_name = time_fragment_cleaner.sub('', course_name)
                                     
-                                    # --- This is a valid data row ---
                                     try:
                                         formatted_row = {
                                             'Date': date_val, 'Time': time_val, 'Course code': course_code,
                                             'Course name': course_name, 'Name of Candidate': name, 'REGISTER NUMBER': reg_num
                                         }
-                                        all_exam_rows.append(formatted_row)
+                                        temp_rows_for_page.append(formatted_row)
                                         processed_rows_on_page += 1
-
                                     except Exception as e:
-                                        log_message(f"Warning: Skipping row on page {i+1}. Details: {e}")
+                                        log_message(f"Warning: Skipping row in Logic A. Details: {e}")
+                        
+                        # --- CHECK AND RETRY ---
+                        if processed_rows_on_page == 0:
+                            log_message(f"Warning: Wild card logic failed for page {i + 1}. Retrying with simple column logic...")
+                            
+                            # --- LOGIC B: Simple Column (for clean PDFs like BA Tamil) ---
+                            if tables:
+                                for table in tables:
+                                    # Simple loop, skip first row (header)
+                                    for row in table[1:]: 
+                                        try:
+                                            if not row or len(row) < 5: continue
+                                            
+                                            course_code = "Unknown"
+                                            course_name = "Unknown"
+                                            date_val = "Unknown"
+                                            time_val = "Unknown"
+
+                                            # Direct mapping from user's sample
+                                            if len(row) == 6: # BA Tamil format
+                                                course_code = row[2]
+                                                course_name = row[3]
+                                                date_val = row[4]
+                                                time_val = row[5]
+                                            elif len(row) == 5: # B.Com format
+                                                course_code = row[2]
+                                                course_name = row[3]
+                                                date_time_str = row[4].split(' ')
+                                                date_val = date_time_str[0]
+                                                time_val = " ".join(date_time_str[1:])
+                                            else:
+                                                continue
+
+                                            # Clean up newlines in all fields
+                                            course_code = course_code.strip().replace('\n', ' ') if course_code else "Unknown"
+                                            course_name = course_name.strip().replace('\n', ' ') if course_name else "Unknown"
+                                            date_val = date_val.strip().replace('\n', ' ') if date_val else "Unknown"
+                                            time_val = time_val.strip().replace('\n', ' ') if time_val else "Unknown"
+                                            
+                                            # --- Clean time fragments ---
+                                            course_name = time_fragment_cleaner.sub('', course_name)
+
+                                            # Validate the extracted data
+                                            if code_regex_search.search(course_code) and date_regex_search.search(date_val):
+                                                formatted_row = {
+                                                    'Date': date_val, 'Time': time_val, 'Course code': course_code,
+                                                    'Course name': course_name, 'Name of Candidate': name, 'REGISTER NUMBER': reg_num
+                                                }
+                                                temp_rows_for_page.append(formatted_row)
+                                                processed_rows_on_page += 1
+                                        except Exception as e:
+                                            log_message(f"Skipping row during retry: {e}")
+                        
+                        # --- END RETRY ---
+                        
+                        # Add the found rows (from Logic A or B) to the main list
+                        all_exam_rows.extend(temp_rows_for_page)
                         
                         if processed_rows_on_page == 0:
-                            log_message(f"Warning: No valid course data rows found on page {i + 1} for {name}.")
+                            log_message(f"Warning: All extraction logic failed for page {i + 1} for {name}.")
                             
                 # --- End of PDF processing logic ---
 
