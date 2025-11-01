@@ -182,7 +182,10 @@
                 # This is a fallback cleaner, but the new logic should catch most fragments
                 time_fragment_cleaner = re.compile(r'\s+\:?\d{2}\sPM$') 
                 
-                reg_num_wildcard = r'VPAY[A-Z]{3}[0-9]{3}'
+                # --- *** GENERIC WILDCARD FIX *** ---
+                # More generic wildcard: 4-7 letters followed by 3 numbers
+                reg_num_wildcard = r'[A-Z]{4,7}[0-9]{3}'
+                # --- *** END FIX *** ---
 
                 # 3. --- Start of PDF processing logic ---
                 with pdfplumber.open(pdf_file_obj) as pdf:
@@ -209,10 +212,12 @@
 
                         # --- Find Register Number (Robust Logic) ---
                         reg_num = "Unknown"
+                        # Try finding the label first
                         reg_match_label = re.search(r'REGISTER\s*\n*\s*NUMBER\s+([A-Z0-9]+)', page_text, re.DOTALL)
                         if reg_match_label:
                             reg_num = reg_match_label.group(1).strip()
                         else:
+                            # Fallback to the generic wildcard pattern
                             reg_match_wildcard_match = re.search(reg_num_wildcard, page_text)
                             if reg_match_wildcard_match:
                                 reg_num = reg_match_wildcard_match.group(0).strip()
@@ -395,12 +400,16 @@
                 blob = Blob.new([csv_data], {type: "text/csv;charset=utf-8"})
                 url = URL.createObjectURL(blob)
                 
+                # --- *** FIX HERE *** ---
+                # Changed 'all_tam_rows' to 'all_exam_rows'
                 download_area.innerHTML = f"""
                     <a href="{url}" download="full_schedule.csv"
                        class="w-full inline-flex justify-center rounded-md border border-transparent bg-green-600 py-3 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
                         Download full_schedule.csv ({len(all_exam_rows)} rows)
                     </a>
                 """
+                # --- *** END FIX *** ---
+                
                 log_message("Success! Your file is ready for download.")
 
             except Exception as e:
